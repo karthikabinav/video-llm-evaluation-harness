@@ -92,7 +92,7 @@ def safe_save_model_for_hf_trainer(trainer: Trainer,
                                    output_dir: str):
     """Collects the state dict and dump to disk."""
 
-    if getattr(trainer.args, "tune_mm_mlp_adapter", False):
+    if getattr(trainer.args, 'tune_mm_mlp_adapter', False):
         # Only save Adapter
         keys_to_match = ['mm_projector']
 
