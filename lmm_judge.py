@@ -8,7 +8,7 @@ from utils import dump_jsonl
 
 
 # Global variable for video_data
-video_data = LongVideoBenchDataset(os.getenv('LVB_PATH'), "lvb_test_wo_gt.json", max_num_frames=128)
+video_data = LongVideoBenchDataset(os.getenv("LVB_PATH"), "lvb_test_wo_gt.json", max_num_frames=128)
 
 
 PROMPTS = {
@@ -76,13 +76,13 @@ A/B/Tie
 
 def response_parse(text):
     """Parse the response text into a dictionary."""
-    pattern = re.compile(r'\[(.*?)\](.*?)(?=\[|$)', re.DOTALL)
+    pattern = re.compile(r"\[(.*?)\](.*?)(?=\[|$)", re.DOTALL)
     content_dict = {}
     
     for match in pattern.finditer(text):
         key = match.group(1).strip()
         value = match.group(2).strip()
-        value = re.sub(r'^```\n?|\n?```$', '', value)
+        value = re.sub(r"^```\n?|\n?```$", "", value)
         content_dict[key] = value
     
     return content_dict
@@ -96,16 +96,16 @@ def run_one_prompt(paths):
     question = sample["question"]
     model_a_answer = sample["model a answer"]
     model_b_answer = sample["model b answer"]
-    output_path = os.path.join(output_dir, f'{qid}.jsonl')
+    output_path = os.path.join(output_dir, f"{qid}.jsonl")
     
     if os.path.exists(output_path):
-        print(f'{output_path} already exists, skipping...')
+        print(f"{output_path} already exists, skipping...")
         return
     
     video_inputs = video_data.get_w_video_id(video_id)["inputs"]
 
     try:
-        chosen_prompt = PROMPTS['role'].format(
+        chosen_prompt = PROMPTS["role"].format(
             persona=persona, 
             question=question, 
             answer_a=model_a_answer, 
@@ -120,7 +120,7 @@ def run_one_prompt(paths):
             sample[key] = value
 
         dump_jsonl([sample], output_path)
-        print(f'Saved {output_path}')
+        print(f"Saved {output_path}")
 
     except Exception as e:
         print(f"Error: {e}")
@@ -150,7 +150,7 @@ def multi_process_request(data, output_dir, worker_num=10):
                     f"expected time: {average_time / 60 * (total_samples - count):.2f}min"
                 )
 
-    print(f'Finished processing {total_samples} samples in {time.time() - start_time:.2f}s')
+    print(f"Finished processing {total_samples} samples in {time.time() - start_time:.2f}s")
 
 def make_sample_data(battle_path):
     """Load sample data from the given path."""
