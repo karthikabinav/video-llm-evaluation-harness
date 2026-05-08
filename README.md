@@ -1,3 +1,3 @@
-# Video LLM Evaluation Harness
+# Documentation
 
-A comprehensive framework for evaluating video-based large language models, including dataset integration, evaluation metrics, and training modules.
+Documentation for Video LLM Evaluation Harness
