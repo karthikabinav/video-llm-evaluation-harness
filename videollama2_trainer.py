@@ -75,16 +75,16 @@ def get_peft_state_non_lora_maybe_zero_3(named_params, require_grad_only=True):
 def find_all_linear_names(model):
     cls = torch.nn.Linear
     lora_module_names = set()
-    multimodal_keywords = ["mm_projector", "vision_tower", "vision_resampler"]
+    multimodal_keywords = ['mm_projector', 'vision_tower', 'vision_resampler']
     for name, module in model.named_modules():
         if any(mm_keyword in name for mm_keyword in multimodal_keywords):
             continue
         if isinstance(module, cls):
-            names = name.split(".")
+            names = name.split('.')
             lora_module_names.add(names[0] if len(names) == 1 else names[-1])
 
-    if "lm_head" in lora_module_names: # needed for 16-bit
-        lora_module_names.remove("lm_head")
+    if 'lm_head' in lora_module_names: # needed for 16-bit
+        lora_module_names.remove('lm_head')
     return list(lora_module_names)
 
 
@@ -94,20 +94,20 @@ def safe_save_model_for_hf_trainer(trainer: Trainer,
 
     if getattr(trainer.args, "tune_mm_mlp_adapter", False):
         # Only save Adapter
-        keys_to_match = ["mm_projector"]
+        keys_to_match = ['mm_projector']
 
         weight_to_save = get_mm_adapter_state_maybe_zero_3(trainer.model.named_parameters(), keys_to_match)
         trainer.model.config.save_pretrained(output_dir)
 
-        current_folder = output_dir.split("/")[-1]
+        current_folder = output_dir.split('/')[-1]
         parent_folder = os.path.dirname(output_dir)
         if trainer.args.local_rank == 0 or trainer.args.local_rank == -1:
-            if current_folder.startswith("checkpoint-"):
+            if current_folder.startswith('checkpoint-'):
                 mm_projector_folder = os.path.join(parent_folder, "mm_projector")
                 os.makedirs(mm_projector_folder, exist_ok=True)
-                torch.save(weight_to_save, os.path.join(mm_projector_folder, f"{current_folder}.bin"))
+                torch.save(weight_to_save, os.path.join(mm_projector_folder, f'{current_folder}.bin'))
             else:
-                torch.save(weight_to_save, os.path.join(output_dir, f"mm_projector.bin"))
+                torch.save(weight_to_save, os.path.join(output_dir, f'mm_projector.bin'))
         return
 
     if trainer.deepspeed:
@@ -242,7 +242,7 @@ class VideoLLaMA2Trainer(Trainer):
         Setup the optimizer.
 
         We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
-        Trainer"s init through `optimizers`, or subclass and override this method in a subclass.
+        Trainer's init through `optimizers`, or subclass and override this method in a subclass.
         """
         if is_sagemaker_mp_enabled():
             return super().create_optimizer()
@@ -318,7 +318,7 @@ class VideoLLaMA2Trainer(Trainer):
         return self.optimizer
 
     def _save_checkpoint(self, model, trial, metrics=None):
-        if getattr(self.args, "tune_mm_mlp_adapter", False):
+        if getattr(self.args, 'tune_mm_mlp_adapter', False):
             from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
             checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{self.state.global_step}"
 
@@ -326,13 +326,13 @@ class VideoLLaMA2Trainer(Trainer):
             output_dir = os.path.join(run_dir, checkpoint_folder)
 
             # Only save Adapter
-            keys_to_match = ["mm_projector", "vision_resampler"]
+            keys_to_match = ['mm_projector', 'vision_resampler']
 
             weight_to_save = get_mm_adapter_state_maybe_zero_3(self.model.named_parameters(), keys_to_match)
 
             if self.args.local_rank == 0 or self.args.local_rank == -1:
                 self.model.config.save_pretrained(output_dir)
-                torch.save(weight_to_save, os.path.join(output_dir, f"mm_projector.bin"))
+                torch.save(weight_to_save, os.path.join(output_dir, f'mm_projector.bin'))
             # Save optimizer and scheduler
             self._save_optimizer_and_scheduler(output_dir)
             # Save RNG state
@@ -355,7 +355,7 @@ class VideoLLaMA2Trainer(Trainer):
                     self.model.config.save_pretrained(output_dir)
                     # save for acquring `adapter_config.json`, `adapter_model.bin`
                     # self.model.save_pretrained(output_dir, state_dict=state_dict)
-                    torch.save(non_lora_state_dict, os.path.join(output_dir, "non_lora_trainables.bin"))
+                    torch.save(non_lora_state_dict, os.path.join(output_dir, 'non_lora_trainables.bin'))
 
                 # save for acquring lora adapter parameters & trainer states: `adapter_config.json`, `adapter_model.safetensors`
                 super(VideoLLaMA2Trainer, self)._save_checkpoint(model, trial, metrics)
@@ -363,7 +363,7 @@ class VideoLLaMA2Trainer(Trainer):
                 super(VideoLLaMA2Trainer, self)._save_checkpoint(model, trial, metrics)
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
-        if getattr(self.args, "tune_mm_mlp_adapter", False):
+        if getattr(self.args, 'tune_mm_mlp_adapter', False):
             pass
         else:
             super(VideoLLaMA2Trainer, self)._save(output_dir, state_dict)
