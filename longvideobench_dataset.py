@@ -130,7 +130,6 @@ class LongVideoBenchDataset(Dataset):
         
         if self.max_num_frames == 0:
             ### No subtitles, no frames        
-            inputs = []
             inputs += ["Question: " + di["question"]]
             inputs += [". ".join([chr(ord("A")+i), candidate]) for i, candidate in enumerate(di["candidates"])]
             inputs += ["Answer with the option's letter from the given choices directly."]
@@ -175,3 +174,7 @@ if __name__ == "__main__":
     db = LongVideoBenchDataset("../", "lvb_val.json")
     for i in range(10):
         print([ele for ele in db[i]["inputs"] if not isinstance(ele, str)])
+                     
+
+            
+            
