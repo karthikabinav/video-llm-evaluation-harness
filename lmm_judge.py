@@ -1,84 +1,78 @@
-import os, re
-import time
-import json, argparse
-from load_longvideobench import LongVideoBenchDataset
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from call_gpt4o import request
-from utils import dump_jsonl
+from abc import ABC, abstractmethod
 
-video_data = LongVideoBenchDataset(os.getenv("LVB_PATH"), "lvb_test_wo_gt.json", max_num_frames=128)
+from PIL import Image
 
-PROMPTS = {
-    "role": "**Remember: You are watching a Video.**\n\nA user, characterized by a specific persona, is interacting with two AI assistant models (A and B) to better understand video content using the same question. Here is the user"s persona:\n```persona\n{persona}\n```\n\nThe user"s question is:\n```question\n{question}\n```\n\nThe response from Model A is:\n```model_a\n{answer_a}\n```\n\nThe response from Model B is:\n```model_b\n{answer_b}\n```\n\nPlease act as an impartial judge and carefully evaluate the responses of Model A and Model B to determine which one is better. Use the following standards:\n\n1. [Instruction Following]: The response should closely adhere to the user"s instructions, ensuring it directly addresses the specified task.\n2. [Accuracy]: The response must accurately utilize information from the video, avoiding fabrication or misquotation. It should maintain factual correctness, avoid hallucinations, and demonstrate contextual coherence with precise terminology and knowledge.\n3. [Relevance]: The response should consider the user"s background information and needs, providing a comprehensive, detailed answer that addresses the question directly without straying off-topic. Responses should be thorough, offering multiple perspectives where relevant.\n4. [Helpfulness]: The response should provide valuable information to aid the user in understanding or solving their issue, avoiding irrelevant or vague content.\n\nIf the responses from Model A and Model B are of similar quality (whether both are good or both are bad), you may declare a tie.\n\n**Please follow these steps for your judgment:**\n\n- Step 1: Analyze which model provides a better response for the [Instruction Following] standard.\n- Step 2: Analyze which model provides a better response for the [Accuracy] standard.\n- Step 3: Analyze which model provides a better response for the [Relevance] standard.\n- Step 4: Analyze which model provides a better response for the [Helpfulness] standard.\n- Step 5: Based on the results from Steps 1-4, determine the overall outcome: Model A, Model B, Tie (both are good), or Tie (both are bad).\n\nPlease respond strictly in the following format:\n\n```[Instruction Following]\n[Your Analysis]\n```\n\n```[Accuracy]\n[Your Analysis]\n```\n\n```[Relevance]\n[Your Analysis]\n```\n\n```[Helpfulness]\n[Your Analysis]\n```\n\n```[Overall Judge]\nA/B/Tie\n```"
-}
+from gimmick.tasks.response import GimmickModelResponse
+from gimmick.tasks.sample import GimmickSample
+from gimmick.eval.metrics import compute_score_accuracy
 
-def response_parse(text):
-    pattern = re.compile(r"\[(.*?)\](.*?)(?=\[|$)", re.DOTALL)
-    content_dict = {}
-    for match in pattern.finditer(text):
-        key = match.group(1).strip()
-        value = match.group(2).strip()
-        value = re.sub(r"^```\n?|\n?```$", "", value)
-        content_dict[key] = value
-    return content_dict
 
-def run_one_prompt(paths):
-    idx, sample, output_dir = paths
-    video_id = sample["video_id"]
-    qid = sample["qid"]
-    persona = sample["persona"]
-    question = sample["question"]
-    model_a_answer = sample["model a answer"]
-    model_b_answer = sample["model b answer"]
-    output_path = os.path.join(output_dir, f"{qid}.jsonl")
-    if os.path.exists(output_path):
-        print(f"{output_path} already exists, skipping...")
-        return
-    video_inputs = video_data.get_w_video_id(video_id)["inputs"]
-    try:
-        chosen_prompt = PROMPTS["role"].format(persona=persona, question=question, answer_a=model_a_answer, answer_b=model_b_answer)
-        response = request(video_inputs=video_inputs, prompt=chosen_prompt)
-        sample["GPT4o Judge response"] = response
-        response_dict = response_parse(response)
-        for key, value in response_dict.items():
-            sample[key] = value
-        dump_jsonl([sample], output_path)
-        print(f"Saved {output_path}")
-    except Exception as e:
-        print(f"Error: {e}")
-        print(f"Error on video: {video_id}")
-        print(f"Error on output_path: {output_path}")
+class LMMJudge(ABC):
+    @abstractmethod
+    def score_vqa_response(
+        self,
+        images: list[Image.Image],
+        question: str,
+        response: str,
+        ground_truth: str,
+        avg_of_n: int = 1,
+    ) -> int:
+        """
+        Scores a VQA response based on the image, question, response, and ground truth on a scale from 0 to 100.
 
-def multi_process_request(data, output_dir, worker_num=10):
-    total_samples = len(data)
-    print(f"Total samples: {total_samples}")
-    with ProcessPoolExecutor(max_workers=worker_num) as executor:
-        start_time = time.time()
-        count = 0
-        futures = [executor.submit(run_one_prompt, [idx, obj, output_dir]) for idx, obj in enumerate(data)]
-        for job in as_completed(futures):
-            job.result(timeout=None)
-            end_time = time.time()
-            average_time = (end_time - start_time) / (count + 1)
-            count += 1
-            if count % 100 == 0:
-                print(f"[worker_num={worker_num}] Processed {count} samples, average time: {average_time:.2f}s, expected time: {average_time / 60 * (total_samples - count):.2f}min")
-    print(f"Finished processing {total_samples} samples in {time.time() - start_time:.2f}s")
+        Args:
+            image (list[Image.Image]): The image(s) the question is based on.
+            question (str): The question the response is based on.
+            response (str): The response to be evaluated.
+            ground_truth (str): The ground truth response to be compared against.
+            avg_of_n (int): The number of times to run the evaluation and average the results.
 
-def make_sample_data(battle_path):
-    with open(battle_path, "r") as file:
-        battle = json.load(file)
-    return battle
+        Returns:
+            int: The score of the response on a scale from 0 to 100. Negative values indicate an error.
+        """
+        raise NotImplementedError
 
-def main():
-    parser = argparse.ArgumentParser(description="Process video QA with different models.")
-    parser.add_argument("--battle_path", type=str, required=True, help="Path to the battle data file.")
-    parser.add_argument("--output_dir", type=str, required=True, help="Directory to store the output results.")
-    parser.add_argument("--worker_num", type=int, default=32, help="Number of workers for multi-processing.")
-    args = parser.parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
-    data = make_sample_data(args.battle_path)
-    multi_process_request(data, args.output_dir, worker_num=args.worker_num)
+    @property
+    @abstractmethod
+    def model_name(self) -> str:
+        """
+        The name of the LMM model.
+        """
+        raise NotImplementedError
 
-if __name__ == "__main__":
-    main()
+
+def load_lmm_judge(
+    hf_model_id: str,
+    device: str = "cuda",
+) -> LMMJudge:
+    if hf_model_id in ["lmms-lab/llava-critic-7b", "lmms-lab/llava-critic-72b"]:
+        from gimmick.eval.llava_critic_judge import LlavaCritic
+
+        return LlavaCritic(hf_model_id=hf_model_id, device=device)
+    else:
+        raise NotImplementedError(f"Model {hf_model_id} not supported as LMM judge")
+
+
+def run_lmm_as_a_judge_scoring(
+    judge: LMMJudge,
+    samples: list[GimmickSample],
+    responses: list[GimmickModelResponse],
+    avg_of_n: int = 1,
+) -> dict[str, str | float]:
+    if len(samples) != len(responses):
+        raise ValueError("Length of samples and responses must match")
+    scores = []
+    for sample, response in zip(samples, responses):
+        images = sample.get("images", [])
+        if not images:
+            raise ValueError("At least one image must be provided for each sample")
+        score = judge.score_vqa_response(
+            images=images,
+            question=sample["prompt"],
+            response=response["response"],
+            ground_truth=sample["ground_truth"],
+            avg_of_n=avg_of_n,
+        )
+        scores.append(score)
+    scores = compute_score_accuracy(scores)
+    return scores
