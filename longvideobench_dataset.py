@@ -7,6 +7,7 @@ from PIL import Image
 import torch
 
 import json
+
 def timestamp_to_seconds(timestamp):
     # Split the timestamp into hours, minutes, and seconds
     h, m, s = timestamp.split(':')
@@ -144,7 +145,7 @@ class LongVideoBenchDataset(Dataset):
             return {"inputs": inputs, "correct_choice": chr(ord("A")+di["correct_choice"]), "id": di["id"]}
             
         frames, frame_timestamps = load_video(os.path.join(self.data_path, "videos", di["video_path"]), di["duration"], max_num_frames=self.max_num_frames)
-
+        
             
         with open(os.path.join(self.data_path, "subtitles", di["subtitle_path"])) as f:
             subtitles = json.load(f)
@@ -173,3 +174,7 @@ if __name__ == "__main__":
     db = LongVideoBenchDataset("../", "lvb_val.json")
     for i in range(10):
         print([ele for ele in db[i]["inputs"] if not isinstance(ele, str)])
+                     
+
+            
+            
